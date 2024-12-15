@@ -238,6 +238,7 @@ def train(
     for i, data in enumerate(tqdm_iter):
         (
             obs_image,
+            target_goal_xy,
             goal_image,
             action_label,
             dist_label,
@@ -254,7 +255,11 @@ def train(
         viz_goal_image = TF.resize(goal_image, VISUALIZATION_IMAGE_SIZE)
         
         goal_image = transform(goal_image).to(device)
-        model_outputs = model(obs_image, goal_image)
+        if target_goal_xy is not None:
+            target_goal_xy = target_goal_xy.to(device)
+            model_outputs = model(obs_image, target_goal_xy)
+        else:
+            model_outputs = model(obs_image, goal_image)
 
         dist_label = dist_label.to(device)
         action_label = action_label.to(device)
@@ -377,6 +382,7 @@ def evaluate(
         for i, data in enumerate(tqdm_iter):
             (
                 obs_image,
+                target_goal_xy,
                 goal_image,
                 action_label,
                 dist_label,
@@ -393,7 +399,11 @@ def evaluate(
             viz_goal_image = TF.resize(goal_image, VISUALIZATION_IMAGE_SIZE)
 
             goal_image = transform(goal_image).to(device)
-            model_outputs = model(obs_image, goal_image)
+            if target_goal_xy is not None:
+                target_goal_xy = target_goal_xy.to(device)
+                model_outputs = model(obs_image, target_goal_xy)
+            else:
+                model_outputs = model(obs_image, goal_image)
 
             dist_label = dist_label.to(device)
             action_label = action_label.to(device)

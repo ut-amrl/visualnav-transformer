@@ -21,7 +21,8 @@ from diffusers.optimization import get_scheduler
 IMPORT YOUR MODEL HERE
 """
 from vint_train.models.gnm.gnm import GNM
-from vint_train.models.vint.vint import ViNT
+# from vint_train.models.vint.vint import ViNT
+from vint_train.models.vint_xy.vint import ViNT
 from vint_train.models.vint.vit import ViT
 from vint_train.models.nomad.nomad import NoMaD, DenseNetwork
 from vint_train.models.nomad.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
@@ -33,6 +34,7 @@ from vint_train.training.train_eval_loop import (
     train_eval_loop,
     train_eval_loop_nomad,
     load_model,
+    filter_dict
 )
 
 
@@ -103,6 +105,7 @@ def main(config):
                         min_action_distance=config["action"]["min_dist_cat"],
                         max_action_distance=config["action"]["max_dist_cat"],
                         negative_mining=data_config["negative_mining"],
+                        goal_xy_target_dist=data_config["goal_xy_target_dist"],
                         len_traj_pred=config["len_traj_pred"],
                         learn_angle=config["learn_angle"],
                         context_size=config["context_size"],
@@ -285,7 +288,7 @@ def main(config):
         print("Loading model from ", load_project_folder)
         latest_path = os.path.join(load_project_folder, "latest.pth")
         latest_checkpoint = torch.load(latest_path) #f"cuda:{}" if torch.cuda.is_available() else "cpu")
-        load_model(model, config["model_type"], latest_checkpoint)
+        load_model(model, config["model_type"], latest_checkpoint, filter_keys=config["load_filter_keys"])
         if "epoch" in latest_checkpoint:
             current_epoch = latest_checkpoint["epoch"] + 1
 
@@ -294,11 +297,11 @@ def main(config):
         model = nn.DataParallel(model, device_ids=config["gpu_ids"])
     model = model.to(device)
 
-    if "load_run" in config:  # load optimizer and scheduler after data parallel
+    if "load_run" in config and len(config['load_filter_keys'])==0:  # load optimizer and scheduler after data parallel
         if "optimizer" in latest_checkpoint:
-            optimizer.load_state_dict(latest_checkpoint["optimizer"].state_dict())
+            optimizer.load_state_dict(latest_checkpoint["optimizer"].state_dict(), strict=False)
         if scheduler is not None and "scheduler" in latest_checkpoint:
-            scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
+            scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict(), strict=False)
 
     if config["model_type"] == "vint" or config["model_type"] == "gnm": 
         train_eval_loop(
@@ -390,7 +393,7 @@ if __name__ == "__main__":
         wandb.init(
             project=config["project_name"],
             settings=wandb.Settings(start_method="fork"),
-            entity="gnmv2", # TODO: change this to your wandb entity
+            entity="artzha", # TODO: change this to your wandb entity
         )
         wandb.save(args.config, policy="now")  # save the config file
         wandb.run.name = config["run_name"]

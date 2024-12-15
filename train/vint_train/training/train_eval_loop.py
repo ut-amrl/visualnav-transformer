@@ -282,7 +282,16 @@ def train_eval_loop_nomad(
     wandb.log({})
     print()
 
-def load_model(model, model_type, checkpoint: dict) -> None:
+def filter_dict(state_dict: dict, filter_keys=[]) -> dict:
+    """Clean weights from checkpoint."""
+    for key in list(state_dict.keys()):
+        for filter_key in filter_keys:
+            if filter_key in key:
+                del state_dict[key]
+                print("Removed key: ", key)
+    return state_dict
+
+def load_model(model, model_type, checkpoint: dict, filter_keys=[]) -> None:
     """Load model from checkpoint."""
     if model_type == "nomad":
         state_dict = checkpoint
@@ -290,10 +299,12 @@ def load_model(model, model_type, checkpoint: dict) -> None:
     else:
         loaded_model = checkpoint["model"]
         try:
-            state_dict = loaded_model.module.state_dict()
+            state_dict = loaded_model.module.state_dict()      
+            filter_dict(state_dict, filter_keys)
             model.load_state_dict(state_dict, strict=False)
         except AttributeError as e:
             state_dict = loaded_model.state_dict()
+            filter_dict(state_dict, filter_keys)
             model.load_state_dict(state_dict, strict=False)
 
 

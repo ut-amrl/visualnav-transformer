@@ -31,6 +31,7 @@ class ViNT_Dataset(Dataset):
         min_action_distance: int,
         max_action_distance: int,
         negative_mining: bool,
+        goal_xy_target_dist: int,
         len_traj_pred: int,
         learn_angle: bool,
         context_size: int,
@@ -82,6 +83,7 @@ class ViNT_Dataset(Dataset):
         self.negative_mining = negative_mining
         if self.negative_mining:
             self.distance_categories.append(-1)
+        self.goal_xy_target_dist = goal_xy_target_dist
         self.len_traj_pred = len_traj_pred
         self.learn_angle = learn_angle
 
@@ -187,18 +189,28 @@ class ViNT_Dataset(Dataset):
 
         return samples_index, goals_index
 
-    def _sample_goal(self, trajectory_name, curr_time, max_goal_dist):
+    def _sample_goal(self, trajectory_name, curr_time, min_goal_dist, max_goal_dist):
         """
         Sample a goal from the future in the same trajectory.
         Returns: (trajectory_name, goal_time, goal_is_negative)
         """
-        goal_offset = np.random.randint(0, max_goal_dist + 1)
+        goal_offset = np.random.randint(min_goal_dist, max_goal_dist + 1)
         if goal_offset == 0:
             trajectory_name, goal_time = self._sample_negative()
             return trajectory_name, goal_time, True
         else:
             goal_time = curr_time + int(goal_offset * self.waypoint_spacing)
             return trajectory_name, goal_time, False
+
+    def _select_goal(self, trajectory_name, curr_time, goal_steps):
+        """
+        Select a goal from the future in the same trajectory.
+        Returns: (trajectory_name, goal_time, goal_is_negative)
+        """
+        # print(f"curr time {curr_time}, goal steps {goal_steps}, waypoint spacing {self.waypoint_spacing}")
+        goal_time = min(curr_time + int(60 * self.waypoint_spacing),
+                        len(self._get_trajectory(trajectory_name)["position"]) - 1)
+        return trajectory_name, goal_time, False
 
     def _sample_negative(self):
         """
@@ -235,6 +247,13 @@ class ViNT_Dataset(Dataset):
             return img_path_to_data(image_bytes, self.image_size)
         except TypeError:
             print(f"Failed to load image {image_path}")
+
+    def _compute_local_goal_xy(self, goal_traj_data, goal_time, traj_data, curr_time):
+        goal_pos = goal_traj_data["position"][goal_time]
+        initial_pos = traj_data["position"][curr_time]
+        initial_yaw = traj_data["yaw"][curr_time]
+        local_goal_xy = to_local_coords(goal_pos, initial_pos, initial_yaw)
+        return local_goal_xy
 
     def _compute_actions(self, traj_data, curr_time, goal_time):
         start_index = curr_time
@@ -298,7 +317,7 @@ class ViNT_Dataset(Dataset):
                 which_dataset (torch.Tensor): index of the datapoint in the dataset [for identifying the dataset for visualization when using multiple datasets]
         """
         f_curr, curr_time, max_goal_dist = self.index_to_data[i]
-        f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist)
+        f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, 0, max_goal_dist)
 
         # Load images
         context = []
@@ -330,7 +349,6 @@ class ViNT_Dataset(Dataset):
         goal_traj_data = self._get_trajectory(f_goal)
         goal_traj_len = len(goal_traj_data["position"])
         assert goal_time < goal_traj_len, f"{goal_time} an {goal_traj_len}"
-
         # Compute actions
         actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time)
         
@@ -351,8 +369,24 @@ class ViNT_Dataset(Dataset):
             (not goal_is_negative)
         )
 
+        if self.goal_xy_target_dist > 0:
+            end_goal_dist = max_goal_dist + self.goal_xy_target_dist
+            f_target_goal, target_goal_time, _ = self._select_goal(f_curr, curr_time, end_goal_dist)
+
+            target_goal_traj_data = self._get_trajectory(f_target_goal)
+            target_goal_traj_len = len(target_goal_traj_data["position"])
+            assert target_goal_time < target_goal_traj_len, f"{target_goal_time} and {target_goal_traj_len}"
+
+            target_local_goal_xy = self._compute_local_goal_xy(
+                target_goal_traj_data, target_goal_time, curr_traj_data, curr_time
+            )
+            target_local_goal_xy = torch.as_tensor(target_local_goal_xy, dtype=torch.float32)
+        else:
+            target_local_goal_xy = torch.zeros(2, dtype=torch.float32)
+        
         return (
             torch.as_tensor(obs_image, dtype=torch.float32),
+            torch.as_tensor(target_local_goal_xy, dtype=torch.float32),
             torch.as_tensor(goal_image, dtype=torch.float32),
             actions_torch,
             torch.as_tensor(distance, dtype=torch.int64),
