@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import roslib
 import rospy
 from std_msgs.msg import Float32MultiArray
@@ -37,7 +38,7 @@ def callback_obs(msg):
     transformed_img = transform_images(obs_img, model_params["image_size"], center_crop=False).to(device)
 
     # Efficiently update the queue
-    if len(context_queue) >= context_size:
+    if len(context_queue) >= context_size+1:
         context_queue.pop(-1)  # Remove the oldest image
     context_queue.insert(0, transformed_img)  # Add the new transformed image to the front
 
@@ -51,12 +52,12 @@ def load_navigation_model(args):
         model_params = yaml.safe_load(f)
 
     ckpt_path = model_paths[args.model]["ckpt_path"]
-    if os.path.exists(ckpth_path):
-        print(f"Loading model from {ckpth_path}")
+    if os.path.exists(ckpt_path):
+        print(f"Loading model from {ckpt_path}")
     else:
-        raise FileNotFoundError(f"Model weights not found at {ckpth_path}")
+        raise FileNotFoundError(f"Model weights not found at {ckpt_path}")
     model = load_model(
-        ckpth_path,
+        ckpt_path,
         model_params,
         device,
     )
@@ -70,14 +71,14 @@ def handle_carrot_planner(req):
     carrot_xy = torch.tensor([carrot.x, carrot.y], dtype=torch.float32).to(device)
     carrot_xy = carrot_xy.unsqueeze(0)  # Add batch dimension  
 
-    if len(context_queue) >= context_size:
+    if len(context_queue) >= context_size+1:
         # Concatenate context images into a single tensor along the channel dimension
         obs_images = torch.cat(context_queue, dim=1).to(device)
+
         with torch.no_grad():
             distances, waypoints = model(obs_images, carrot_xy)
-            distances = to_numpy(distances)
-            waypoints = to_numpy(waypoints)
-            print("waypoints", waypoints)
+            distances = to_numpy(distances)[0]
+            waypoints = to_numpy(waypoints)[0]
 
         if model_params["normalize"]:
             waypoints[:2] *= (MAX_V / RATE)
@@ -87,17 +88,19 @@ def handle_carrot_planner(req):
         path = Path()
         path.header.frame_id = "base_link"
         path.header.stamp = rospy.Time.now()
+
         for waypoint in waypoints:
             pose = PoseStamped()
             pose.pose.position.x = waypoint[0]
             pose.pose.position.y = waypoint[1]
-            response.waypoint.append(pose)
-
-        rospy.loginfo(f"Returning path: {response.path}")
+            path.poses.append(pose)
+        response.path = path
+        # rospy.loginfo(f"Returning path: {response.path}")
+        rospy.loginfo(f"Returning path with endpoint {waypoints[-1]}")
         return response
     else:
         rospy.logwarn("Not enough context images for inference.")
-        return CarrotPlannerSrvResponse(waypoint=[])
+        return CarrotPlannerSrvResponse(path=path)
 
 def main():
     global context_size, model, model_params, args

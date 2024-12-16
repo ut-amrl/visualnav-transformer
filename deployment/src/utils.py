@@ -19,9 +19,9 @@ from typing import List, Tuple, Dict, Optional
 
 # models
 from vint_train.models.gnm.gnm import GNM
-from vint_train.models.vint.vint import ViNT
+from vint_train.models.vint_xy.vint import ViNT
 
-from vint_train.models.vint.vit import ViT
+from vint_train.models.vint_xy.vit import ViT
 from vint_train.models.nomad.nomad import NoMaD, DenseNetwork
 from vint_train.models.nomad.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
 from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D

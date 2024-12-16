@@ -45,7 +45,7 @@ class GoalEncoder(nn.Module):
             torch.Tensor: Encoded goal of shape (batch_size, output_dim).
         """
         B = x.shape[0]
-        
+
         # Expand the latent vector to match the batch size
         h = self.latent_vector.unsqueeze(0).expand(B, -1)
         
