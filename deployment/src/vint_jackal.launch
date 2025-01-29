@@ -1,0 +1,22 @@
+<launch>
+    <!-- Camera assumed to be launched already -->
+
+    <!-- Joystick assumed to be launched already -->
+
+    <!-- Launch the locobot with only use_base -->
+    <include file="$(find kobuki_node)/launch/minimal.launch"></include> 
+    
+    <!-- Command velocity multiplexer launched already -->
+    <!-- <arg name="nodelet_manager_name"  value="nodelet_manager"/>
+    <arg name="config_file"           value="/home/racecar/vint_release/gnm-v2/deployment/config/cmd_vel_mux.yaml"/> -->
+  
+    <!-- nodelet manager -->
+    <!-- <node pkg="nodelet" type="nodelet" name="$(arg nodelet_manager_name)" args="manager"/> -->
+    
+    <!-- velocity mulitplexer -->
+    <!-- <include file="$(find yocs_cmd_vel_mux)/launch/cmd_vel_mux.launch">
+        <arg name="nodelet_manager_name"  value="$(arg nodelet_manager_name)"/>
+        <arg name="config_file"           value="$(arg config_file)"/>
+    </include> -->
+
+</launch>
