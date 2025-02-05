@@ -93,7 +93,7 @@ class ViNT(BaseModel):
             goal_encoding = goal_encoding.unsqueeze(1)
         # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
         assert goal_encoding.shape[2] == self.goal_encoding_size
-        
+
         # split the observation into context based on the context size
         # image size is [batch_size, 3*self.context_size, H, W]
         obs_img = torch.split(obs_img, 3, dim=1)
@@ -112,6 +112,7 @@ class ViNT(BaseModel):
         # currently, the size is [batch_size, self.context_size+2, self.obs_encoding_size]
 
         obs_encoding = self.compress_obs_enc(obs_encoding)
+        import pdb; pdb.set_trace()
         # currently, the size is [batch_size*(self.context_size + 1), self.obs_encoding_size]
         # reshape the obs_encoding to [context + 1, batch, encoding_size], note that the order is flipped
         obs_encoding = obs_encoding.reshape((self.context_size+1, -1, self.obs_encoding_size))
